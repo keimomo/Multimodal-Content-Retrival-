@@ -1,0 +1,10 @@
+ipykernel
+git+https://github.com/openai/whisper.git
+sentence-transformers 
+transformers
+pillow
+accelerate
+pandas
+torchcodec
+numpy
+pinecone

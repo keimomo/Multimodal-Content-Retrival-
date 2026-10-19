@@ -1,0 +1,43 @@
+# Python environments
+.venv*/
+venv/
+videollm/
+
+# Python cache/build
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+build/
+dist/
+*.egg-info/
+
+# Jupyter
+.ipynb_checkpoints/
+notebooks/note_assets/
+
+# Local data and generated media
+data/
+*.mp3
+*.mp4
+*.wav
+*.zip
+
+# Models
+*.pt
+*.pth
+*.safetensors
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# macOS
+.DS_Store
+._*
+__MACOSX/
+
+# Logs
+*.log
