@@ -10,7 +10,7 @@ class VideoProcessor:
         self.csv_dir = output_dir / "csv"
         self.processed_file = []
 
-   def csv_processing(self):
+    def csv_processing(self, csv_dir: Path):
         video_data = []
         for csv_file in self.csv_dir.glob("*.csv"):
             df = pd.read_csv(csv_file, header=None, names=["name", "start", "end"])

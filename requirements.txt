@@ -8,3 +8,4 @@ pandas
 torchcodec
 numpy
 pinecone
+pyyaml
