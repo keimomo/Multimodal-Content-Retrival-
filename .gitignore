@@ -23,6 +23,8 @@ data/
 *.mp4
 *.wav
 *.zip
+*.yaml
+*.txt
 
 # Models
 *.pt
