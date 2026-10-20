@@ -121,33 +121,6 @@ Inspect representative samples for missing words, technical terms, timestamp off
 
 Decisions still to make: transcription engine and model, whether alignment / speaker labels are needed, document parser, OCR languages, chunk sizes and overlap, and how slides / PDFs relate to video moments. Standalone document search results should open the matching page or slide; they should not be presented as video moments without a time mapping.
 
-### 4. Optional setup for these experiments
-
-The commands below document dependencies for the chosen method; they have not been run. Install only the tools needed for the experiment. The existing `brew install ffmpeg deno yt-dlp` setup remains relevant to media processing and downloading.
-
-| Tool | When needed | macOS command / reference |
-| --- | --- | --- |
-| Tesseract | Required when choosing the Tesseract OCR path. Homebrew includes English and orientation data. | `brew install tesseract` — [formula](https://formulae.brew.sh/formula/tesseract). |
-| Additional OCR languages | Optional for non-English OCR, such as Japanese. Configure the OCR language explicitly, e.g. `eng+jpn`. | `brew install tesseract-lang` — [language data](https://formulae.brew.sh/formula/tesseract-lang). |
-| Poppler | Optional CLI tools such as `pdftotext` and `pdftoppm` for extraction comparisons or rendering. Not required by PyMuPDF. | `brew install poppler` — [formula](https://formulae.brew.sh/formula/poppler). |
-| LibreOffice | Optional for converting presentations to PDF for a common extraction / rendering path. Not required for direct PPTX extraction. | `brew install --cask libreoffice` — [cask](https://formulae.brew.sh/cask/libreoffice). |
-
-Candidate Python installs, in the project environment:
-
-```bash
-# Direct PDF and native PPTX extraction
-python -m pip install pymupdf python-pptx
-
-# Optional layout-aware parsers; compare independently
-python -m pip install pymupdf4llm
-python -m pip install docling
-
-# Optional alternative speech transcription engine
-python -m pip install faster-whisper
-```
-
-Whisper is already listed in `requirements.txt`. For WhisperX, follow its linked installation guide and use a separate environment if its PyTorch / alignment dependencies conflict with the current notebook environment. No new packages have been added to the project requirements yet.
-
 ## Repository contents
 
 | Path | Purpose |

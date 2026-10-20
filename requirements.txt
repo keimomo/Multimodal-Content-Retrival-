@@ -9,3 +9,5 @@ torchcodec
 numpy
 pinecone
 pyyaml
+kagglehub
+dotenv

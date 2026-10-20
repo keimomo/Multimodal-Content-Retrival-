@@ -1,20 +1,32 @@
 import whisper
-import yaml
 from pathlib import Path
-class AudioProcessor:
-    def __init__(self, model_name: str = "base", device: str = "cpu"):
-        self.device = "cuda" if device == "cuda" else "cpu"
-        self.model = whisper.load_model(model_name, device=self.device)
-    
-    def transcribe(self, file_path: Path):
+import gc
+import torch
 
+class AudioProcessor:
+    def __init__(self, model_name: str = "small", device: str = "cpu"):
+        self.device = "cuda" if device == "cuda" else "cpu"
+        self.model = None
+        self.model_name = model_name
+    
+
+    def transcribe(self, file_path: Path, modality: str):
+        video_id = file_path.stem
         result = self.model.transcribe(str(file_path), word_timestamps=True, fp16=(self.device == "cuda"), language="ja")
         metadata = {
             "file_path": file_path,
-            "modality": "audio_text",
-            "text": {
-                "full_text": result["text"],
-                "segments": [f"{segment['start']:.2f}_{segment['end']:.2f}_{segment['text']}" for segment in result["segments"]]
-            }
+            "modality": modality,
+            "video_id": video_id,
+            "text": result
         }
         return metadata
+    
+    def load_model(self):
+        if self.model is None:
+            self.model = whisper.load_model(self.model_name, device=self.device)
+
+    def unload_model(self):
+        self.model = None
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
