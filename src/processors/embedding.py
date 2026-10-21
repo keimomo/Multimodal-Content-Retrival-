@@ -35,9 +35,39 @@ class MultiModalEmbedding:
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-    #TODO: Implement text embedding
-    def embed_text(self, text: str) -> np.ndarray:
-        pass
+    """"
+    chunk = {
+                "id": f"{id}_transcript_{chunk_id}",
+                "original_id": id,
+                "modality": f"{modality}_transcript",
+                "start": selected_chunk[0]["start"],
+                "end": selected_chunk[-1]["end"],
+                "text": txt,
+            }
+    """
+    def embed_text(self, meta_data: list[dict]) -> list[dict]:
+        embedded_meta_data = []
+        for chunk in meta_data:
+            meta_data = {
+                "id": chunk["id"],
+                "original_id": chunk["original_id"],
+                "modality": chunk["modality"],
+                "start": chunk["start"],
+                "end": chunk["end"],
+                "text": chunk["text"]
+            }
+            embedding = self.model.encode(
+                chunk["text"],
+                normalize_embeddings=True,
+                convert_to_numpy=True,
+                device=self.device,
+                show_progress_bar=True,
+            ).reshape(-1)
+            embedded_meta_data.append({
+                "meta_data": meta_data,
+                "embedding": embedding
+            })
+        return embedded_meta_data
 
     def embed_video(self, meta_data: list[dict]) -> list[dict]:
         embedded_meta_data = []

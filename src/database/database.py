@@ -43,17 +43,16 @@ class PineconeDatabase:
                 meta_data = data["meta_data"]
                 id = f"{meta_data['video_id']}_{meta_data['clip_id']}"
             
-                self.video_index.upsert(
+                self.video_index.documents.upsert(
                     namespace = "video",
-                    vectors = [
+                    documents = [
                         {
-                            "id": id,
-                            "values": embedding.tolist(),
-                            "metadata": {
-                                "modality": "video",
-                                "start": meta_data["start"],
-                                "end": meta_data["end"],
-                            }
+                            "_id": id,
+                            "embedding": embedding.tolist(),
+                            "modality": "video",
+                            "start": meta_data["start"],
+                            "end": meta_data["end"],
+                            
                         }
                     ]
                 )
@@ -61,8 +60,31 @@ class PineconeDatabase:
         except Exception as e:
             print(f"Error adding video data: {e}")
 
-    def add_text_data(self, meta_data: dict, embedding: np.ndarray):
-        pass
+    def add_text_data(self, meta_data: list[dict]):
+        try:
+            for data in meta_data:
+                embedding = data["embedding"]
+                meta_data = data["meta_data"]
+                id = f"{meta_data['original_id']}_{meta_data['id']}"
+                
+                self.text_index.documents.upsert(
+                    namespace = "text",
+                    documents = [
+                        {
+                            "_id": id,
+                            "original_id": meta_data["original_id"],
+                            "id": meta_data["id"],
+                            "embedding": embedding.tolist(),
+                            "modality": meta_data["modality"],
+                            "start": meta_data["start"],
+                            "end": meta_data["end"],
+                            "text": meta_data["text"],
+                        }
+                    ]
+                )
+                print(f"Text data added to database: {id}")
+        except Exception as e:
+            print(f"Error adding text data: {e}")
 
     def query(self, query):
         pass
