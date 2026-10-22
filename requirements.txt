@@ -1,9 +1,11 @@
 ipykernel
 git+https://github.com/openai/whisper.git
-sentence-transformers 
-transformers
+# EmbeddingGemma 2 requires Sentence Transformers 6.1+ and Transformers 5.19+.
+sentence-transformers>=6.1.0,<7.0.0
+transformers>=5.19.0,<6.0.0
 pillow
 accelerate
+bitsandbytes>=0.46.1
 pandas
 torchcodec
 numpy
