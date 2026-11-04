@@ -1,41 +1,31 @@
-import pinecone
-from dotenv import load_dotenv
-import os
-import numpy as np
 from pinecone import Pinecone, SchemaBuilder
 
 
 class PineconeDatabase:
-    def __init__(self):
-        load_dotenv()
-        self.db = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
+    def __init__(self, get_api_key: callable):
+        self.db = Pinecone(api_key=get_api_key("pinecone"))
+        self.index = None
 
+    def connect(self):
         schema = (
             SchemaBuilder()
             .add_dense_vector_field(name="embedding", dimension=768, metric="cosine")
             .build()
         )
 
-        if not self.db.indexes.exists("video-vectors-dev"):
+        if not self.db.indexes.exists("mm-vectors-cli"):
             print("Creating index...")
             self.db.indexes.create(
-                name="video-vectors-dev",
+                name="mm-vectors-cli",
                 schema=schema
             )
-            print("video-vectors-dev index created")
+            print("mm-vectors-cli index created")
 
-        if not self.db.indexes.exists("text-vectors-dev"):
-            print("Creating index...")
-            self.db.indexes.create(
-                name="text-vectors-dev",
-                schema=schema
-            )
-            print("text-vectors-dev index created")
-    
-        self.video_index = self.db.Index("video-vectors-dev")
-        self.text_index = self.db.Index("text-vectors-dev")
+        self.index = self.db.Index("mm-vectors-cli")
 
-    
+    def disconnect(self):
+        self.index = None
+
     def add_video_data(self, embedding_meta_data: list[dict]):
         try:
             for data in embedding_meta_data:
