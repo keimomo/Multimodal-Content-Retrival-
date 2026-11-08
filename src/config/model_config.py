@@ -10,17 +10,57 @@ class ModelConfig:
 
         self.embedding_model = "Embedding Gemma 2"
 
-        self.translation_model = "Whis"
+        self.translation_model = "Whisper"
+        self.translation_model_name = "small"
 
         self.vector_db_provider = "pinecone"
         self.service = "vrag-cli"
 
     
+    def set_model_provider(self, model_name: list[str], provider: str):
+        choice_model = questionary.select(
+            "Select a model:",
+            choices=[
+                f"{model[0]}" for model in model_name
+            ]
+        ).ask()
+        self.chat_model = choice_model
+        self.chat_provider = provider
+       
 
-    def get_available_models(self, mode: str) -> list[str]:
-        pass
-    def set_model(self, mode: str, provider: str, model: str):
-        pass
+    def set_chat_model(self, all_models: list[tuple[str, str]]):
+        choice_model = questionary.select(
+            "Select a chat model:",
+            choices=[
+                f"{model[1]}:{model[0]}" for model in all_models
+            ]
+        ).ask()
+        model_name = choice_model.split(":")[1]
+        model_provider = choice_model.split(":")[0]
+        try:
+            self.get_api_key(model_provider)
+            self.chat_model = model_name
+            self.chat_provider = model_provider
+            print(f"Chat model {self.chat_model} set successfully.")
+        except ValueError as e:
+            print(f"API key not found for {model_provider}. Please set the API key.")
+            self.save_api_key(model_provider)
+            self.chat_model = model_name
+            self.chat_provider = model_provider
+            print(f"Chat model {self.chat_model} set successfully.")
+            return model_provider
+        return None
+    
+    def set_translation_model(self, all_models: list[tuple[str, str]]):
+        choice_model = questionary.select(
+            "Select a translation model:",
+            choices=[
+                f"{model[1]}:{model[0]}" for model in all_models
+            ]
+        ).ask()
+        self.translation_model_name = choice_model.split(":")[1].split(" ")[1]
+        print(f"Translation model {self.translation_model_name} set successfully.")
+
     
 
     def set_api_key(self):
@@ -33,6 +73,7 @@ class ModelConfig:
             ]
         ).ask()
         self.save_api_key(provider)
+        return provider
 
 
     def save_api_key(self, provider: str):

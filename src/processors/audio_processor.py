@@ -2,35 +2,29 @@ import whisper
 from pathlib import Path
 import gc
 import torch
-import json
 class AudioProcessor:
-    def __init__(self, queue_dir:Path, model_name: str = "small", device: str = "cpu"):
-        self.device = "cuda" if device == "cuda" else "cpu"
+    def __init__(self, device: str):
         self.model = None
-        self.model_name = model_name
-        self.queue_dir = queue_dir
+        self.model_name = "small"
+        self.device = "cpu" if device != "cuda" else device
     
-    def save_json(self, path: Path, value: dict):
-        path.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    def transcribe(self, file_path: Path,  modality: str):
-        video_id = file_path.stem
-        result = self.model.transcribe(str(file_path), word_timestamps=True, fp16=(self.device == "cuda"), language="ja")
-        metadata = {
-            "modality": modality,
-            "video_id": video_id,
-            "text": result
-        }
-        output_path = Path(self.queue_dir / f"{video_id}.json")
-        self.save_json(output_path, metadata)
-        return output_path
-    
-    def load_model(self):
+    def transcribe(self, file_path: str):
         if self.model is None:
-            self.model = whisper.load_model(self.model_name, device=self.device)
+            raise ValueError("Model not loaded. Please load the model first.")
+        if Path(file_path).suffix != ".mp4":
+            raise ValueError("Only video files are supported. Please provide a .mp4 file.")
+        return self.model.transcribe(file_path, word_timestamps=False, fp16=(self.device == "cuda"))
+    
+    def load_model(self, name: str = "small"):
+        if self.model is None:
+            self.model = whisper.load_model(name, device=self.device)
+            self.model_name = name
+            print(f"Model {self.model_name} loaded successfully.")
 
     def unload_model(self):
+        print(f"Unloading model {self.model_name}...")
         self.model = None
         gc.collect()
-        if torch.cuda.is_available():
+        if self.device == "cuda":
             torch.cuda.empty_cache()

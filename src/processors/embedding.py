@@ -5,15 +5,9 @@ import numpy as np
 from pathlib import Path
 
 class MultiModalEmbedding:
-    def __init__(self, model_name: str = "google/embeddinggemma-2"):
+    def __init__(self, model_name: str = "google/embeddinggemma-2", device: str = "cuda"):
         self.model_name = model_name
-        if torch.cuda.is_available():
-            self.device = "cuda"
-        else:
-            if torch.backends.mps.is_available():
-                self.device = "mps"
-            else:
-                self.device = "cpu"
+        self.device = device
 
         self.model = None
 
@@ -32,19 +26,11 @@ class MultiModalEmbedding:
     def unload_model(self):
         self.model = None
         gc.collect()
-        if torch.cuda.is_available():
+        if self.device == "cuda":
             torch.cuda.empty_cache()
+        elif self.device == "mps":
+            torch.mps.empty_cache()
 
-    """"
-    chunk = {
-                "id": f"{id}_transcript_{chunk_id}",
-                "original_id": id,
-                "modality": f"{modality}_transcript",
-                "start": selected_chunk[0]["start"],
-                "end": selected_chunk[-1]["end"],
-                "text": txt,
-            }
-    """
     def embed_text(self, meta_data: list[dict]) -> list[dict]:
         embedded_meta_data = []
         for chunk in meta_data:
@@ -69,35 +55,25 @@ class MultiModalEmbedding:
             })
         return embedded_meta_data
 
-    def embed_video(self, meta_data: list[dict]) -> list[dict]:
-        embedded_meta_data = []
-        for data in meta_data:
-            file_path = Path(data["video_path"])
-            print(f"Embedding video: {file_path.name}")
-            embedding = self.model.encode(
-                str(file_path),
-                normalize_embeddings=True,
-                convert_to_numpy=True,
-                device=self.device,
-                show_progress_bar=True,
-                processing_kwargs={
-                    "video": {
-                        "fps": 1,
-                        "max_frames": 32,
-                        "add_timestamps": True,
-                        "max_soft_tokens": 280,
-                        "overflow_strategy": "uniform",
-                    }
-                },
-            ).reshape(-1)
+    def embed_video(self, file_path: Path) -> np.ndarray:
+        embedding = self.model.encode(
+            str(file_path),
+            normalize_embeddings=True,
+            convert_to_numpy=True,
+            device=self.device,
+            show_progress_bar=False,
+            processing_kwargs={
+                "video": {
+                    "fps": 1,
+                    "max_frames": 32,
+                    "add_timestamps": True,
+                    "max_soft_tokens": 280,
+                    "overflow_strategy": "uniform",
+                }
+            },
+        ).reshape(-1)
 
-            embedded_meta_data.append({
-                "meta_data": data,
-                "embedding": embedding
-            })
-            file_path.unlink()
-
-        return embedded_meta_data
+        return embedding
 
     def embed_image(self, image: str) -> np.ndarray:
         pass

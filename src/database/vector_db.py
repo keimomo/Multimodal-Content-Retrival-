@@ -23,46 +23,39 @@ class PineconeDatabase:
 
         self.index = self.db.Index("mm-vectors-cli")
 
-    def disconnect(self):
-        self.index = None
-
-    def add_video_data(self, embedding_meta_data: list[dict]):
+    def add_video_data(self, name, embedding, start, end, source_id, source_path):
         try:
-            for data in embedding_meta_data:
-                embedding = data["embedding"]
-                meta_data = data["meta_data"]
-                id = f"{meta_data['video_id']}_{meta_data['clip_id']}"
-            
-                self.video_index.documents.upsert(
-                    namespace = "video",
-                    documents = [
-                        {
-                            "_id": id,
-                            "embedding": embedding.tolist(),
-                            "modality": "video",
-                            "start": meta_data["start"],
-                            "end": meta_data["end"],
-                            
-                        }
-                    ]
-                )
-                print(f"Video data added to database: {id}")
+            self.index.documents.upsert(
+                namespace = "video",
+                documents = [
+                    {
+                        "_id": name,
+                        "source": source_id,
+                        "source_path": source_path,
+                        "embedding": embedding.tolist(),
+                        "start": start,
+                        "end": end,
+                    }
+                ]
+            )
+            print(f"Video data added to database: {id}")
         except Exception as e:
             print(f"Error adding video data: {e}")
 
-    def add_text_data(self, meta_data: list[dict]):
+    def add_text_data(self, meta_data: list[dict], data_id: str):
         try:
             for data in meta_data:
                 embedding = data["embedding"]
-                meta_data = data["meta_data"]
-                id = f"{meta_data['original_id']}_{meta_data['id']}"
+                start = data["start"]
+                end = data["end"]
+                name = data["name"]
                 
-                self.text_index.documents.upsert(
+                self.index.documents.upsert(
                     namespace = "text",
                     documents = [
                         {
                             "_id": id,
-                            "original_id": meta_data["original_id"],
+                            "source": meta_data["original_id"],
                             "id": meta_data["id"],
                             "embedding": embedding.tolist(),
                             "modality": meta_data["modality"],
