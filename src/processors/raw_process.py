@@ -8,6 +8,8 @@ import shutil
 import pandas as pd
 import re
 import json
+import cv2
+import base64
 
 class RawProcess:
     def __init__(self, device: torch.device):
@@ -57,6 +59,55 @@ class RawProcess:
         subprocess.run(command, check=True)
         
         return temp_file
+        
+    def extract_frames(self, abs_path: str, interval: float, start: float, end: float):
+        cap = cv2.VideoCapture(abs_path)
+
+        if not cap.isOpened():
+            cap.release()
+            raise ValueError(f"Cannot open {abs_path}")
+
+        frames = []
+        clip_length = end - start
+        offset = 0.0
+
+        try:
+            while offset < clip_length:
+                cap.set(cv2.CAP_PROP_POS_MSEC, offset * 1000)
+                success, frame = cap.read()
+
+                if not success:
+                    break
+
+                # Resize to reduce request size.
+                height, width = frame.shape[:2]
+                if max(height, width) > 1024:
+                    scale = 1024 / max(height, width)
+                    frame = cv2.resize(
+                        frame,
+                        (round(width * scale), round(height * scale)),
+                    )
+
+                success, buffer = cv2.imencode(".jpg", frame)
+                if not success:
+                    raise ValueError("Could not encode video frame")
+
+                encoded = base64.b64encode(buffer).decode("utf-8")
+
+                frames.append({
+                    "timestamp": start + offset,
+                    "image_url": f"data:image/jpeg;base64,{encoded}",
+                })
+
+                offset += interval
+        finally:
+            cap.release()
+
+        if not frames:
+            raise ValueError(f"No frames extracted from {abs_path}")
+
+        return frames
+
 
     def count_tokens(self, text: str, budget: int = 500, overlap: int = 100):
         tokenizer = self.embedding.model.tokenizer
@@ -163,6 +214,7 @@ class RawProcess:
 
     def semantic_search(self, pinecone_db, user_query:str):
         embedding = self.embedding.embed_text(user_query)
+        self.embedding.release_cache()
         hits = pinecone_db.query(embedding)
         hits = [h for h in hits if h["score"] > 0.5]
         return hits

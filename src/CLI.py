@@ -12,6 +12,7 @@ from threading import Thread, Event
 import time
 import torch
 
+
 class CLI:
     def __init__(self):
         self.sql_db = SQLDB()
@@ -216,8 +217,10 @@ class CLI:
         elif args[0] == "idle":
             if self.raw_process.embedding.model is not None:
                 self.raw_process.embedding.unload_model()
+
             self.state = "idle"
         elif args[0] == "chat":
+            self.llm.set_client(self.model_config.chat_provider)
             self.raw_process.embedding.load_model()
             self.state = "chat"
         else:
@@ -360,9 +363,44 @@ class CLI:
             print("No hits found.")
             return
         for index, hit in enumerate(hits):
-            print(f"{index+1}: {hit['modality']} ->{hit['source_path']} [{hit['start']}-{hit['end']}] -> {hit['score']}")
-        return
+            if hit['modality'] == "video":
+                frames = self.raw_process.extract_frames(hit['source_path'], hit['start'], hit['end'])
+                hits[index]['frames'] = frames
+            else:
+                row = self.sql_db.get_transcription_by_chunk_id(hit['chunk_id'])
+                text = row[0]
+                hits[index]['text'] = text
+        answer = self.llm.answer_question(user_query, hits, self.model_config.chat_model)
+        self.display_answer(answer)
+        print("--------------------------------")
 
+    def timestamp(self, seconds):
+        seconds = int(seconds)
+        return f"{seconds // 60:02d}:{seconds % 60:02d}"
+
+    def display_answer(self, answer):
+        paragraphs = []
+
+        for block in answer.answer_blocks:
+            paragraphs.append(block.text)
+
+            for citation in block.citations:
+                source = citation.source_id
+                if (
+                    citation.start_seconds is not None
+                    and citation.end_seconds is not None
+                ):
+                    source += (
+                        f" · {self.timestamp(citation.start_seconds)}"
+                        f"–{self.timestamp(citation.end_seconds)}"
+                    )
+                paragraphs.append(f"*Source: {source}*")
+
+        if answer.limitations:
+            paragraphs.append("**Limitations**")
+            paragraphs.extend(f"- {item}" for item in answer.limitations)
+        
+        print("\n\n".join(paragraphs))
         
 
 

@@ -256,6 +256,14 @@ class SQLDB:
         if cursor is None:
             raise ValueError(f"Source with id {id} not found.")
         return cursor
+    
+    def get_transcription_by_chunk_id(self, chunk_id: int):
+        cursor = self.connection.execute(
+            "SELECT text FROM chunks WHERE id = ?", (chunk_id,)
+        ).fetchone()
+        if cursor is None:
+            raise ValueError(f"Chunk with id {chunk_id} not found.")
+        return cursor
         
     def update_source_status(self, connection, id: int, status: str, transcript: str = None,):
         if transcript is not None:

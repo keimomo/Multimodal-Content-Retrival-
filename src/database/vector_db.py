@@ -87,7 +87,7 @@ class PineconeDatabase:
             "source_path": hit.source_path,
             "start": hit.start,
             "end": hit.end,
-            "modality": hit.modality,
+            "modality": "video",
         } for hit in visual_serach.matches]
 
         text_hits = [{
@@ -97,7 +97,7 @@ class PineconeDatabase:
             "source_path": hit.source_path,
             "start": hit.start,
             "end": hit.end,
-            "modality": hit.modality,
+            "modality": "text",
         } for hit in text_serach.matches]
 
         hits = video_hits+text_hits
