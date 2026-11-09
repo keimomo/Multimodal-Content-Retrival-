@@ -42,30 +42,22 @@ class PineconeDatabase:
         except Exception as e:
             print(f"Error adding video data: {e}")
 
-    def add_text_data(self, meta_data: list[dict], data_id: str):
-        try:
-            for data in meta_data:
-                embedding = data["embedding"]
-                start = data["start"]
-                end = data["end"]
-                name = data["name"]
-                
-                self.index.documents.upsert(
-                    namespace = "text",
-                    documents = [
-                        {
-                            "_id": id,
-                            "source": meta_data["original_id"],
-                            "id": meta_data["id"],
-                            "embedding": embedding.tolist(),
-                            "modality": meta_data["modality"],
-                            "start": meta_data["start"],
-                            "end": meta_data["end"],
-                            "text": meta_data["text"],
-                        }
-                    ]
-                )
-                print(f"Text data added to database: {id}")
+    def add_text_data(self, embedding, data_id: int, source_path: str, chunk_id: int, start: float, end: float):
+        try:  
+            self.index.documents.upsert(
+                namespace = "text",
+                documents = [
+                    {
+                        "_id": str(chunk_id),
+                        "source": data_id,
+                        "source_path": source_path,
+                        "embedding": embedding.tolist(),
+                        "modality": "transcription_chunks",
+                        "start": start,
+                        "end": end,
+                    }
+                ]
+            )
         except Exception as e:
             print(f"Error adding text data: {e}")
 

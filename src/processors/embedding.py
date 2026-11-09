@@ -5,7 +5,7 @@ import numpy as np
 from pathlib import Path
 
 class MultiModalEmbedding:
-    def __init__(self, model_name: str = "google/embeddinggemma-2", device: str = "cuda"):
+    def __init__(self,device: torch.device, model_name: str = "google/embeddinggemma-2"):
         self.model_name = model_name
         self.device = device
 
@@ -13,10 +13,10 @@ class MultiModalEmbedding:
 
     def load_model(self):
         if self.model is None:
-            if self.device == "cuda" and torch.cuda.is_bf16_supported():
-                dtype = torch.bfloat16
-            else:
+            if self.device == torch.device("cpu"):
                 dtype = torch.float32
+            else:
+                dtype = torch.float16
             self.model = SentenceTransformer(
                 self.model_name,
                 device=self.device,
@@ -26,34 +26,24 @@ class MultiModalEmbedding:
     def unload_model(self):
         self.model = None
         gc.collect()
-        if self.device == "cuda":
+        if self.device == torch.device("cuda"):
             torch.cuda.empty_cache()
-        elif self.device == "mps":
+        elif self.device == torch.device("mps"):
             torch.mps.empty_cache()
 
-    def embed_text(self, meta_data: list[dict]) -> list[dict]:
-        embedded_meta_data = []
-        for chunk in meta_data:
-            meta_data = {
-                "id": chunk["id"],
-                "original_id": chunk["original_id"],
-                "modality": chunk["modality"],
-                "start": chunk["start"],
-                "end": chunk["end"],
-                "text": chunk["text"]
-            }
-            embedding = self.model.encode(
-                chunk["text"],
-                normalize_embeddings=True,
-                convert_to_numpy=True,
-                device=self.device,
-                show_progress_bar=True,
-            ).reshape(-1)
-            embedded_meta_data.append({
-                "meta_data": meta_data,
-                "embedding": embedding
-            })
-        return embedded_meta_data
+    def embed_text(self, text: str) -> np.ndarray:
+        if self.model is None:
+            raise ValueError("Model not loaded.")
+        
+        embedding = self.model.encode(
+            text,
+            normalize_embeddings=True,
+            convert_to_numpy=True,
+            device=self.device,
+            show_progress_bar=False,
+        ).reshape(-1)
+        self.release_cache()
+        return embedding
 
     def embed_video(self, file_path: Path) -> np.ndarray:
         embedding = self.model.encode(
@@ -72,9 +62,14 @@ class MultiModalEmbedding:
                 }
             },
         ).reshape(-1)
+        self.release_cache()
 
         return embedding
 
-    def embed_image(self, image: str) -> np.ndarray:
-        pass
+    def release_cache(self):
+        gc.collect()
+        if self.device == torch.device("cuda"):
+            torch.cuda.empty_cache()
+        elif self.device == torch.device("mps"):
+            torch.mps.empty_cache()
     

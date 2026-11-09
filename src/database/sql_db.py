@@ -1,7 +1,5 @@
 import sqlite3
-from pathlib import Path
 import json
-from pydantic import NonNegativeFloat
 
 class SQLDB:
     def __init__(self, path="vrag.db"):
@@ -251,17 +249,14 @@ class SQLDB:
                 "SELECT id, path, status FROM sources WHERE status in (?,?, ?)", ('pending', 'transcribed', 'text_embeded',)
             ).fetchall()
 
-    def get_source_path(self, id:int = None,):
-        if id == None:
-            raise ValueError("Id must be provided.")
-
-        cursor = self.connection.execute(
-            "SELECT id, path, status FROM sources WHERE id = ?", (id,)
+    def get_transcription(self, connection, id: int):
+        cursor = connection.execute(
+            "SELECT transcript FROM sources WHERE id = ?", (id,)
         ).fetchone()
         if cursor is None:
             raise ValueError(f"Source with id {id} not found.")
         return cursor
-    
+        
     def update_source_status(self, connection, id: int, status: str, transcript: str = None,):
         if transcript is not None:
             connection.execute("UPDATE sources SET status = ?, transcript = ? WHERE id = ?", (status, json.dumps(transcript, ensure_ascii=False), id))
@@ -270,8 +265,11 @@ class SQLDB:
         connection.commit()
     
     def insert_chunk(self, connection, source_id: int, modality: str, start_time: float, end_time: float, status: str, text: str):
-        connection.execute("INSERT INTO chunks (source_id, modality, start_time, end_time, status, text) VALUES (?, ?, ?, ?, ?, ?)", (source_id, modality, start_time, end_time, status, text))
-        connection.commit()
+        cursor = connection.execute(
+            "INSERT INTO chunks (source_id, modality, start_time, end_time, status, text) VALUES (?, ?, ?, ?, ?, ?)",
+            (source_id, modality, start_time, end_time, status, text)
+        )
+        return cursor.lastrowid
 
     def close(self):
-        self.connection.close()ex
+        self.connection.close()

@@ -158,10 +158,12 @@ class CLI:
         worker_db = self.sql_db.get_connection()
         while not self.exit_event.is_set():
             while not self.audio_queue.empty() and not self.exit_event.is_set():
-                if self.audio_processor.model is None:
-                    self.audio_processor.load_model()
+                
                 if self.raw_process.embedding.model is not None:
                     self.raw_process.embedding.unload_model()
+                if self.audio_processor.model is None:
+                    self.audio_processor.load_model()
+
                 id, path = self.audio_queue.get()
                 self.handle_audio(id, path, worker_db)
                 self.embed_queue.put((id, path, "transcribed"))
@@ -326,13 +328,13 @@ class CLI:
 
     def handle_audio(self, id: int, path: str, worker_db: SQLDB):
         transcription = self.audio_processor.transcribe(path)
-        self.sql_db.updat_source_status(connection=worker_db, id=id, status="transcribed", transcript=transcription)
-        self.embed_queue.put((id, path, "transcribed"))
+        self.sql_db.update_source_status(connection=worker_db, id=id, status="transcribed", transcript=transcription)
     
     def handle_embed(self, id: int, path: str, status: str, worker_db: SQLDB):
         self.raw_process.embedding.load_model()
         if status == "transcribed":
             print(f"embedding transcribed text...")
+            self.raw_process.process_text(connection=worker_db, sql_db=self.sql_db, pinecone_db=self.vector_db, abs_path=path, data_id=id)
             self.embed_queue.put((id, path, "text_embeded"))
         elif status == "text_embeded":
             print(f"embedding video...")
@@ -359,7 +361,7 @@ class CLI:
                 if model_provider is None:
                     print("Chat model set successfully.")
                     return
-                self.sql_db.check_api_key(model_provider)
+
                 if self.sql_db.check_api_key(model_provider):
                     print(f"API key for {model_provider} set successfully.")
                     self.sql_db.update_api_key(model_provider, 'Complete')
