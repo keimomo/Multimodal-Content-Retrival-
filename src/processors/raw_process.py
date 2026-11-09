@@ -160,3 +160,9 @@ class RawProcess:
             i = temp
 
         return chunks
+
+    def semantic_search(self, pinecone_db, user_query:str):
+        embedding = self.embedding.embed_text(user_query)
+        hits = pinecone_db.query(embedding)
+        hits = [h for h in hits if h["score"] > 0.5]
+        return hits

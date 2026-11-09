@@ -1,5 +1,5 @@
-from pinecone import Pinecone, SchemaBuilder
-
+from pinecone import Pinecone, SchemaBuilder, DenseVectorQuery
+import numpy as np
 
 class PineconeDatabase:
     def __init__(self, get_api_key: callable):
@@ -62,6 +62,48 @@ class PineconeDatabase:
             print(f"Error adding text data: {e}")
 
     def query(self, query):
-        pass
+        visual_serach = self.index.documents.search(
+            namespace="videos",
+            top_k=10,
+            score_by=[DenseVectorQuery(
+                field="embedding",
+                values=np.array(query).reshape(-1).tolist()
+            )],
+            include_fields=["*"]
+        )
+        text_serach = self.index.documents.search(
+                namespace="text",
+                top_k=10,
+                score_by=[DenseVectorQuery(
+                    field="embedding",
+                    values=np.array(query).reshape(-1).tolist()
+                )],
+                include_fields=["*"]
+            )
+
+        video_hits = [{
+            "score": hit.score,
+            "source": hit.source,
+            "source_path": hit.source_path,
+            "start": hit.start,
+            "end": hit.end,
+            "modality": hit.modality,
+        } for hit in visual_serach.matches]
+
+        text_hits = [{
+            "score": hit.score,
+            "chunk_id": hit.id,
+            "source": hit.source,
+            "source_path": hit.source_path,
+            "start": hit.start,
+            "end": hit.end,
+            "modality": hit.modality,
+        } for hit in text_serach.matches]
+
+        hits = video_hits+text_hits
+        hits.sort(key=lambda x: x["score"], reverse=True)
+        
+        return hits[:5]
+        
 
     

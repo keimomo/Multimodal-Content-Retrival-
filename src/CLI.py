@@ -4,7 +4,6 @@ from database.vector_db import PineconeDatabase
 from processors.audio_processor import AudioProcessor
 from processors.raw_process import RawProcess
 from processors.llm import LLM
-import keyring
 from pinecone import UnauthorizedError, PineconeConnectionError, ApiError
 import sqlite3
 from pathlib import Path
@@ -43,6 +42,7 @@ class CLI:
             "model": self.handle_model,
             "exit": self.quit,
             "queue": self.handle_queue,
+            "q:" : self.handle_query,
         }
         self.audio_queue = Queue()
         self.embed_queue = Queue()
@@ -210,10 +210,15 @@ class CLI:
             print(f"Too many arguments. Type /help for more information.")
             return
         if args[0] == "data":
+            if self.raw_process.embedding.model is not None:
+                self.raw_process.embedding.unload_model()
             self.state ="data"
         elif args[0] == "idle":
+            if self.raw_process.embedding.model is not None:
+                self.raw_process.embedding.unload_model()
             self.state = "idle"
         elif args[0] == "chat":
+            self.raw_process.embedding.load_model()
             self.state = "chat"
         else:
             print(f"Unknown state: {args[0]}")
@@ -342,6 +347,25 @@ class CLI:
         else:
             print(f"Error: Unknown status: {status}")
             return
+    def handle_query(self, args=None):
+        if len(args) == 0:
+            print(f"What would you like to query?")
+            return
+        user_query = " ".join(args).strip()
+        print("--------------------------------")
+        print("user: ", user_query)
+        print("--------------------------------")
+        hits = self.raw_process.semantic_search(self.vector_db, user_query)
+        if len(hits) == 0:
+            print("No hits found.")
+            return
+        for index, hit in enumerate(hits):
+            print(f"{index+1}: {hit['modality']} ->{hit['source_path']} [{hit['start']}-{hit['end']}] -> {hit['score']}")
+        return
+
+        
+
+
 
     def handle_model(self, args=None):
         if len(args) == 0:
@@ -368,8 +392,6 @@ class CLI:
                 else:
                     print(f"API key for {model_provider} not found. Please set the API key.")
                     return
-             
-            
         elif sub_commands == "translation":
             translation_model = self.sql_db.get_translation_model()
             if translation_model is None:
