@@ -150,7 +150,7 @@ class SQLDB:
                     (name,)
                 )
         except sqlite3.Error as e:
-            print(f"Error inserting workspace: {e}")
+            print(f"[error] Could not save workspace {name!r} in the local database: {e}")
             return False
         return True
 
@@ -182,7 +182,7 @@ class SQLDB:
                     (del_id,)
                 )
         except sqlite3.Error as e:
-            print(f"Error deleting workspace: {e}")
+            print(f"[error] Could not remove workspace {name!r} or move its sources: {e}")
             return False
         return True
 
@@ -201,9 +201,9 @@ class SQLDB:
             return cursor.lastrowid
         except sqlite3.IntegrityError as e:
             if e.sqlite_errorcode == sqlite3.SQLITE_CONSTRAINT_UNIQUE:
-                print(f"Error: Data {path} is already registered.")
+                print(f"[error] This source is already registered: {path}. Use data ls or ws data <name> to find its record.")
             else:
-                print(f"Error inserting data: {e}")
+                print(f"[error] Could not register source {path!r} in workspace {workspace_name!r}: {e}")
             return None
 
     # Model related functions

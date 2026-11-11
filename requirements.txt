@@ -1,15 +1,27 @@
-ipykernel
-git+https://github.com/openai/whisper.git
-# EmbeddingGemma 2 requires Sentence Transformers 6.1+ and Transformers 5.19+.
-sentence-transformers>=6.1.0,<7.0.0
+# CLI runtime: Python 3.11-3.14; Linux or Apple Silicon macOS.
+# Image/video extras supply torchvision, Pillow, and PyAV for multimodal input.
+# PyAV avoids requiring TorchCodec's platform-specific binaries for the CLI.
+torch>=2.6.0,<3.0.0
+sentence-transformers[image,video]>=6.1.0,<7.0.0
 transformers>=5.19.0,<6.0.0
-pillow
-accelerate
-bitsandbytes>=0.46.1
-pandas
-torchcodec
-numpy
-pinecone
-pyyaml
-kagglehub
-dotenv
+accelerate>=1.1.0,<2.0.0
+openai-whisper>=20250625
+numpy>=2.2.6,<3.0.0
+pandas>=2.2.0,<4.0.0
+opencv-python-headless>=4.10.0,<5.0.0
+PyYAML>=6.0.0,<7.0.0
+
+# Pinecone 10 supplies SchemaBuilder, DenseVectorQuery, and the documents API.
+pinecone>=10.0.0,<11.0.0
+
+# All three provider SDKs are currently imported by processors/llm.py.
+# Answer generation currently implements only the OpenAI request path.
+openai>=1.98.0
+google-genai>=1.0.0
+anthropic>=0.40.0
+pydantic>=2.0.0,<3.0.0
+
+# Terminal prompts and OS-backed credential storage.
+questionary>=2.0.0,<3.0.0
+keyring>=25.0.0
+SecretStorage>=3.3.0; sys_platform == "linux"

@@ -19,7 +19,7 @@ class ModelConfig:
     
     def set_model_provider(self, model_name: list[str], provider: str):
         choice_model = questionary.select(
-            "Select a model:",
+            "Select the configured answer model:",
             choices=[
                 f"{model[0]}" for model in model_name
             ]
@@ -30,7 +30,7 @@ class ModelConfig:
 
     def set_chat_model(self, all_models: list[tuple[str, str]]):
         choice_model = questionary.select(
-            "Select a chat model:",
+            "Select an answer provider/model (OpenAI is the supported answer path):",
             choices=[
                 f"{model[1]}:{model[0]}" for model in all_models
             ]
@@ -41,31 +41,31 @@ class ModelConfig:
             self.get_api_key(model_provider)
             self.chat_model = model_name
             self.chat_provider = model_provider
-            print(f"Chat model {self.chat_model} set successfully.")
+            print(f"[model] Configured answer preference: {self.chat_provider}:{self.chat_model}")
         except ValueError as e:
-            print(f"API key not found for {model_provider}. Please set the API key.")
+            print(f"[credentials] No saved key for {model_provider}. Enter it at the hidden prompt to continue setup.")
             self.save_api_key(model_provider)
             self.chat_model = model_name
             self.chat_provider = model_provider
-            print(f"Chat model {self.chat_model} set successfully.")
+            print(f"[model] Configured answer preference: {self.chat_provider}:{self.chat_model}")
             return model_provider
         return None
     
     def set_translation_model(self, all_models: list[tuple[str, str]]):
         choice_model = questionary.select(
-            "Select a translation model:",
+            "Select a transcription preference (the worker currently loads Whisper small):",
             choices=[
                 f"{model[1]}:{model[0]}" for model in all_models
             ]
         ).ask()
         self.translation_model_name = choice_model.split(":")[1].split(" ")[1]
-        print(f"Translation model {self.translation_model_name} set successfully.")
+        print(f"[model] Transcription preference: Whisper {self.translation_model_name}. The worker currently loads small independently of this setting.")
 
     
 
     def set_api_key(self):
         provider = questionary.select(
-            "Select a provider to set the API key:",
+            "Choose a provider for credential setup (OpenAI is the supported answer path):",
             choices=[
                 "openai",
                 "anthropic",
@@ -78,16 +78,16 @@ class ModelConfig:
 
     def save_api_key(self, provider: str):
         # getpass hides what the user types.
-        key = getpass(f"Enter your {provider} API key: ").strip()
+        key = getpass(f"{provider} API key (hidden; stored in the OS keyring): ").strip()
 
         if not key:
             raise ValueError("API key cannot be empty.")
 
         try:
             keyring.set_password(self.service, provider, key)
-            print(f"{provider} key saved.")
+            print(f"[credentials] Saved {provider} API key to the OS keyring (value hidden).")
         except Exception as e:
-            print(f"Error saving {provider} key: {e}")
+            print(f"[error] Could not save the {provider} key in the OS keyring: {e}")
 
 
     def get_api_key(self, provider: str) -> str:

@@ -13,6 +13,7 @@ class MultiModalEmbedding:
 
     def load_model(self):
         if self.model is None:
+            print(f"[load] Embeddings: {self.model_name} on {self.device}; weights may download on first use...")
             if self.device == torch.device("cpu"):
                 dtype = torch.float32
             else:
@@ -23,7 +24,9 @@ class MultiModalEmbedding:
                 model_kwargs={"torch_dtype": dtype},
                 config_kwargs={"audio_config": None},
             )
+            print(f"[ready] Embedding model loaded: {self.model_name}")
     def unload_model(self):
+        print(f"[memory] Releasing embedding model: {self.model_name}")
         self.model = None
         gc.collect()
         if self.device == torch.device("cuda"):
@@ -46,8 +49,14 @@ class MultiModalEmbedding:
         return embedding
 
     def embed_video(self, file_path: Path) -> np.ndarray:
+        file_path = Path(file_path)
+        if not file_path.is_file():
+            raise FileNotFoundError(f"Video clip not found: {file_path}")
+        if self.model is None:
+            raise ValueError("Model not loaded.")
+
         embedding = self.model.encode(
-            str(file_path),
+            {"video": str(file_path)},
             normalize_embeddings=True,
             convert_to_numpy=True,
             device=self.device,
@@ -72,4 +81,3 @@ class MultiModalEmbedding:
             torch.cuda.empty_cache()
         elif self.device == torch.device("mps"):
             torch.mps.empty_cache()
-    

@@ -7,7 +7,7 @@ import datetime
 class FileConfig:
     def __init__(self, project_root: str):
         self.project_root = Path(project_root).expanduser().resolve()
-        print(self.project_root)
+        print(f"[config] Project root: {self.project_root}")
         self.data_root = self.project_root / "data"
         self.raw_dir = self.data_root / "raw"
         self.processed_dir = self.data_root / "processed"
@@ -54,7 +54,7 @@ class FileConfig:
         with open(Path(self.project_root / "config.yaml"), "w", encoding="utf-8") as f:
             yaml.safe_dump(config, f, sort_keys=False)
         
-        print(f"Config saved to {Path(self.project_root / 'config.yaml')}")
+        print(f"[config] Saved {self.project_root / 'config.yaml'} | device: {self.device}\n         Data directories created under {self.data_root}.")
 
     
 if __name__ == "__main__":

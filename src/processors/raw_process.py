@@ -18,19 +18,24 @@ class RawProcess:
     
     def process_video(self, connection, sql_db, pinecone_db, abs_path: str, data_id: str,):
         #1 create 30s clips of video
+        print(f"[segment] Source #{data_id} | {Path(abs_path).name}: creating video clips...")
         data_path = self.chunking_video(abs_path)
 
         #get clip metadata and save it in the sql database
         df = pd.read_csv(data_path / f"segments.csv", header=None, names=["name", "start", "end"])
         # for each clip, generate embedding and save it in the array. 
 
-        for _, row in df.iterrows():
-            name = row["name"]
+        for index, row in df.iterrows():
+            document_id = f"{data_id}_{index}"
+            clip_path = data_path / row["name"]
+            if not clip_path.is_file():
+                raise FileNotFoundError(f"Video clip not found: {clip_path}")
             start = row["start"]
             end = row["end"]
+            print(f"[encode:video] Source #{data_id} | clip {clip_path.name} | {start}-{end}s | vector {document_id}")
             sql_db.insert_chunk(connection=connection, source_id=data_id, modality="video", start_time=start, end_time=end, status="completed", text=None)
-            embedding = self.embedding.embed_video(file_path=Path(data_path / name))
-            pinecone_db.add_video_data(name=name, embedding=embedding, start=start, end=end, source_id=data_id, source_path=abs_path)
+            embedding = self.embedding.embed_video(file_path=clip_path)
+            pinecone_db.add_video_data(name=document_id, embedding=embedding, start=start, end=end, source_id=data_id, source_path=abs_path)
 
         #delete temp file
         shutil.rmtree(data_path)
@@ -73,7 +78,7 @@ class RawProcess:
 
         try:
             while offset < clip_length:
-                cap.set(cv2.CAP_PROP_POS_MSEC, offset * 1000)
+                cap.set(cv2.CAP_PROP_POS_MSEC, (start + offset) * 1000)
                 success, frame = cap.read()
 
                 if not success:
@@ -122,6 +127,7 @@ class RawProcess:
 
         transcript = json.loads(row[0])["segments"]
         chunks = self.build_chunks(transcript, data_id, self.count_tokens)
+        print(f"[chunk:text] Source #{data_id} | {Path(abs_path).name}: prepared {len(chunks)} transcript chunks.")
         #2 chunk them and store chunk metadata indb<- prob better to use queue or stack or some sort so mem is optimized
         while chunks:
             chunk = chunks.pop()

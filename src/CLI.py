@@ -54,12 +54,12 @@ class CLI:
 
         
         if not self.sql_db.health_check():
-            print("Error: SQL database is not healthy. Please check the database connection. Exiting...")
+            print("[error] Local database check failed. Check access to vrag.db; startup cannot continue.")
             exit()
         else:
-            print("SQL database is healthy.")
+            print("[ready] Local database: vrag.db")
         check_list = self.sql_db.setup_check(stage='initialization', status='Incomplete')
-        print(f"Found {len(check_list)} items to complete setup.")
+        print(f"[setup] Remaining first-run steps: {len(check_list)}")
         if check_list:
             self.init_cli(check_list)
         
@@ -68,17 +68,17 @@ class CLI:
         self.run()
 
     def init_cli(self, check_list):
-        print("Initializing CLI...")
+        print("\nFirst-run setup\n---------------")
         for item in check_list:
             key = item[0]
-            print(f"Setting {key} is incomplete. Initiating setup...")
+            print(f"[setup] Configuring: {key}")
             if key == 'workspace':
                 self.sql_db.insert_workspace("uncategorized")
                 if self.sql_db.check_workspace("uncategorized"):
-                    print("Workspace 'uncategorized' created successfully.")
+                    print("[ready] Default workspace: uncategorized")
                     self.sql_db.update_setting('workspace', 'Complete')
                 else:
-                    print("Error: Workspace 'uncategorized' creation failed. Exiting...")
+                    print("[error] Could not create the default workspace. Startup cannot continue.")
                     exit()
             elif key == 'llm_api_key':
                 try:
@@ -90,7 +90,7 @@ class CLI:
                     self.sql_db.update_default_model(self.model_config.chat_model, self.model_config.chat_provider)
                     self.sql_db.update_setting('llm_api_key', 'Complete')
                 except Exception as e:
-                    print(f"Error: {e}")
+                    print(f"[error] Chat-provider setup failed: {e}")
                     exit()
             elif key == 'vector_db_api_key':
                 try:
@@ -98,7 +98,7 @@ class CLI:
                     self.sql_db.update_api_key('pinecone', 'Complete')
                     self.sql_db.update_setting('vector_db_api_key', 'Complete')
                 except Exception as e:
-                    print(f"Error: {e}")
+                    print(f"[error] Pinecone credential setup failed: {e}")
                     exit()
 
     """"
@@ -107,42 +107,43 @@ class CLI:
     """
     def bootup(self):
         list_of_settings = self.sql_db.setup_check(stage='bootup')
-        print(f"{len(list_of_settings)} items to before bootup.")
+        print(f"\n[startup] Preparing {len(list_of_settings)} services | embedding device: {self.device}")
         for setting in list_of_settings:
             key = setting[0]
-            print(f"Initiating {key} setup...")
+            print(f"[startup] Step: {key}")
             if key == 'vector_db_connection':
-                print("Connecting to Pinecone...")
+                print("[connect] Pinecone index: mm-vectors-cli")
                 try:
                     self.vector_db = PineconeDatabase(get_api_key=self.model_config.get_api_key)
                     self.vector_db.connect()
                     self.sql_db.update_setting("vector_db_connection", "Complete")
+                    print("[ready] Pinecone initialized: mm-vectors-cli.")
                 except ValueError:
                     self.sql_db.update_setting("vector_db_api_key", "Incomplete")
-                    print("No Pinecone API key is saved. It will be requested on the next launch.")
+                    print("[error] No saved Pinecone API key. Restart the CLI to enter one.")
                     raise SystemExit(1)
                 except UnauthorizedError:
                     self.sql_db.update_setting("vector_db_api_key", "Incomplete")
-                    print("Pinecone rejected the saved API key. It will be requested again on the next launch.")
+                    print("[error] Pinecone rejected the saved API key. Restart the CLI to replace it.")
                     raise SystemExit(1)
                 except sqlite3.Error as error:
-                    print(f"Could not record the connection status: {error}")
+                    print(f"[error] Could not save Pinecone connection status in vrag.db: {error}")
                     raise SystemExit(1)
 
             elif key == 'llm_client_connection':
-                print("Creating LLM client connection...")
+                print("[startup] Preparing the answer service; the API client is initialized by cd chat.")
                 try:
                     self.llm = LLM(get_api_key=self.model_config.get_api_key)
                     self.sql_db.update_setting('llm_client_connection', 'Complete')
                 except ValueError:
                     self.sql_db.update_setting("llm_api_key", "Incomplete")
-                    print("No OpenAI API key is saved. It will be requested on the next launch.")
+                    print("[error] No saved OpenAI API key. Restart the CLI to enter one.")
                     raise SystemExit(1)
                 except Exception as e:
-                    print(f"Error: {e}")
+                    print(f"[error] Answer-service setup failed: {e}")
                     raise SystemExit(1)
             else:
-                print(f"Unknown setting: {key}")
+                print(f"[warning] Unrecognized startup setting: {key}")
     def start_workers(self):
         rows = self.sql_db.get_all_queued_data()
         for (id, path, status) in rows:
@@ -169,7 +170,7 @@ class CLI:
                 self.handle_audio(id, path, worker_db)
                 self.embed_queue.put((id, path, "transcribed"))
                 self.audio_queue.task_done()
-                print(f"Audio worker: {id, path} transcribed and added to embedding queue")
+                print(f"[transcribe] Source #{id} | {Path(path).name}: transcript saved; queued for embedding.")
             time.sleep(1)
             
 
@@ -182,156 +183,217 @@ class CLI:
                 id, path, status = self.embed_queue.get()
                 self.handle_embed(id, path, status, worker_db)
                 self.embed_queue.task_done()
-                print(f"Embed worker: {id, path, status} processed")
+                print(f"[worker] Source #{id} | {Path(path).name}: processing pass finished (input stage: {status}).")
             time.sleep(1)
 
     def run(self):
-        print("Running CLI...")
+        print("\nVideo Moment Retrieval\n----------------------\nType help for commands. Use queue to view pending work.\n")
         self.state = "idle"
         while True:
-            command = input(f"vrag [{self.state} -> {self.current_workspace}]: ").strip().lower().split(" ")
+            command = input(f"vrag | {self.current_workspace} | {self.state} > ").strip().lower().split(" ")
             if command[0] in self.commands:
                 self.dispatch(command)
             else:
-                print(f"Unknown command: {' '.join(command)}. /help for available commands.")
+                print(f"[error] Unknown command: {' '.join(command)!r}. Type help (without a leading slash).")
 
     def quit(self, args=None):
+        print("[shutdown] Stopping the worker. An active processing operation may take time to return...")
         self.raw_process.embedding.unload_model()
         self.sql_db.close()
         self.exit_event.set()
         self.process_thread.join()
-        print("Exiting...")
+        print("[shutdown] Worker stopped. Goodbye.")
         exit()
     
     def set_state(self, args):
         if len(args) == 0:
-            print(f"Too few arguments. Type /help for more information.")
+            print("[usage] cd <idle|data|chat>  -  Choose one mode.")
             return
         if len(args) > 1:
-            print(f"Too many arguments. Type /help for more information.")
+            print("[usage] cd <idle|data|chat>  -  Supply exactly one mode.")
             return
         if args[0] == "data":
             if self.raw_process.embedding.model is not None:
                 self.raw_process.embedding.unload_model()
             self.state ="data"
+            print("[mode] data | Background processing continues. Use data add <path> to queue a file.")
         elif args[0] == "idle":
             if self.raw_process.embedding.model is not None:
                 self.raw_process.embedding.unload_model()
 
             self.state = "idle"
+            print("[mode] idle | Background processing continues. Use queue to view work.")
         elif args[0] == "chat":
             self.llm.set_client(self.model_config.chat_provider)
             self.raw_process.embedding.load_model()
             self.state = "chat"
+            print(f"[mode] chat | Configured answer model: {self.model_config.chat_provider}:{self.model_config.chat_model}")
+            print("[hint] Ask with q: <question>. Retrieval searches all workspaces.")
         else:
-            print(f"Unknown state: {args[0]}")
+            print(f"[error] Unknown mode: {args[0]!r}. Available modes: idle, data, chat.")
           
 
 
     def handle_help(self, args=None):
-        print("Available commands:")
+        print("""
+VIDEO MOMENT RETRIEVAL - COMMAND REFERENCE
+========================================
+Enter commands without a leading slash. <...> marks a required argument.
+
+WORKSPACES
+  ws                    Show the selected workspace.
+  ws ls                 List all workspaces.
+  ws add <name>         Create a workspace.
+  ws set <name>         Select a workspace for registration and file listings.
+  ws data <name>        List sources and statuses in a named workspace.
+  ws rm <name>          Remove a workspace; move its sources to uncategorized.
+                        The uncategorized workspace cannot be removed.
+
+FILES AND PROCESSING
+  data add <path>       Register an existing MP4 and queue background processing.
+  data ls               List sources and statuses in the selected workspace.
+  queue                 List unfinished sources, including work in progress.
+
+MODES AND QUESTIONS
+  cd data               Enter data mode; background processing continues.
+  cd idle               Enter idle mode; background processing continues.
+  cd chat               Initialize the answer client and load query embeddings.
+  q: <question>         Retrieve evidence and generate a timestamped answer.
+                        Enter cd chat before querying.
+
+MODEL PREFERENCES
+  model                 Show configured model and provider preferences.
+  model chat            Open the answer-provider/model selection menu.
+  model translation     Select a transcription preference. The worker currently
+                        loads Whisper small independently of this preference.
+
+SESSION
+  help                  Show this command reference.
+  exit                  Request shutdown and wait for the worker to stop.
+
+EXAMPLE SESSION
+  ws add lectures
+  ws set lectures
+  data add ./data/raw/lecture.mp4
+  queue
+  data ls
+  cd chat               (after processing has finished)
+  q: what does the lecturer say about neural networks?
+  exit
+
+CURRENT BEHAVIOR
+  - Input is lowercased. Use lowercase paths without spaces; quoted paths
+    are not supported. Only lowercase .mp4 inputs are accepted by processing.
+  - Processing stages: pending -> transcribed -> text_embeded -> completed.
+    text_embeded is the stored spelling for the text-indexing stage.
+  - Workspaces organize local records. Questions search the entire index.
+  - Choose OpenAI for answers; other provider menus are not fully integrated.
+  - Wait for ingestion to finish before cd chat; it shares the embedding model.
+  - Model changes do not persist reliably across restarts. If you change the
+    chat provider in a session, re-enter cd chat to rebuild the client.
+""")
     
     def handle_workspace(self, args=None):
         if len(args) == 0:
-            print(f"Current workspace -> {self.current_workspace}")
+            print(f"[workspace] Selected: {self.current_workspace}")
             return
 
         sub_commands = args[0]
         if sub_commands == "ls":
             list = self.sql_db.get_all_workspaces()
-            print(f"{len(list)} workspaces found:")
+            print(f"\nWorkspaces ({len(list)})\n----------------")
             for (name, ) in list:
-                print(f"{name}")
+                print(f"  {name}")
         elif sub_commands == "add":
             if len(args) == 2:
                 name = args[1].strip().lower()
                 if self.sql_db.insert_workspace(name):
-                    print(f"Workspace '{name}' added successfully.")
+                    print(f"[workspace] Workspace available: {name}. Select it with ws set {name}.")
                 else:
-                    print(f"Error: Workspace '{name}' addition failed.")
+                    print(f"[error] Could not create workspace: {name}")
             else:
-                print("argument error. Type /help for more information.")
+                print("[usage] ws add <name>  -  Supply one workspace name.")
         
         elif sub_commands == "rm":
             if len(args) == 2:
                 name = args[1].strip().lower()
                 if name == "uncategorized": 
-                    print("Error: Cannot remove 'uncategorized' workspace.")
+                    print("[error] The default workspace uncategorized cannot be removed.")
                     return
                 if self.sql_db.delete_workspace(name):
-                    print(f"Workspace '{name}' removed successfully.")
+                    print(f"[workspace] Removed {name}; its sources were moved to uncategorized.")
                 else:
-                    print(f"Error: Workspace '{name}' removal failed.")
+                    print(f"[error] Could not remove workspace: {name}")
                 if self.current_workspace == name:
                     self.current_workspace = "uncategorized"
-                    print("Current workspace set to 'uncategorized'.")
+                    print("[workspace] Selected: uncategorized")
             else:
-                print("argument error. Type /help for more information.")
+                print("[usage] ws rm <name>  -  Supply one workspace name.")
             
         elif sub_commands == "data":
             name = args[1].strip().lower()
             try:
                 rows = self.sql_db.get_data_by_workspace(name)
-                print(f"{len(rows)} data found:")
+                print(f"\nSources in {name} ({len(rows)})\n  ID     Status         File / path")
                 if len(rows) == 0:
                     return
                 for (id, path, status) in rows:
-                    print(f"{id} - {Path(path).name} - {status}")
+                    print(f"  {id:<6} {status:<14} {Path(path).name}\n         Path: {path}")
             except ValueError as e:
-                print(f"Error: {e}. Type /help for more information.")
+                print(f"[error] Could not list workspace sources: {e}")
                 return
             #show all data linked to given workspace
         elif sub_commands == "set":
-            print("set the current workspace")
+            print(f"[workspace] Selecting: {args[1]}")
             name = args[1].strip().lower()
             if self.sql_db.check_workspace(name) is not None:
                 self.current_workspace = name
-                print(f"Current workspace set to '{name}'.")
+                print(f"[workspace] Selected: {name}")
             else:
-                print(f"Error: Workspace '{name}' not found. Type /ws li to see all workspaces.")
+                print(f"[error] Workspace {name!r} does not exist. Use ws ls to list workspaces.")
         else:
-            print(f"Unknown sub-command: {sub_commands}")
+            print(f"[error] Unknown workspace command: {sub_commands!r}. Use ws, ws ls, ws add, ws set, ws data, or ws rm.")
             return
 
     def handle_data(self, args=None):
         if len(args) == 0:
-            print(f"Too few arguments. Type /help for more information.")
+            print("[usage] data ls | data add <path>  -  Type help for examples.")
             return
         sub_commands = args[0]
         if sub_commands == "ls":
             list = self.sql_db.get_data_by_workspace(self.current_workspace)
-            print(f"{len(list)} data found:")
+            print(f"\nSources in {self.current_workspace} ({len(list)})\n  ID     Status         File / path")
             if len(list) == 0:
                 return
             for (id, path, status) in list:
-                print(f"{id} - {Path(path).name} - {status}")
+                print(f"  {id:<6} {status:<14} {Path(path).name}\n         Path: {path}")
         elif sub_commands == "add":
             if len(args) == 2:
                 file_path = args[1].strip()
                 absolute_path = Path(file_path).expanduser().resolve()
                 if not absolute_path.exists():
-                    print(f"Error: File {file_path} not found.")
+                    print(f"[error] File not found: {absolute_path}. Check the path and filename case.")
                     return
                 if not absolute_path.is_file():
-                    print(f"Error: {file_path} is not a file.")
+                    print(f"[error] Expected a file, but this path is a directory or another item: {absolute_path}")
                     return
                 id = self.sql_db.insert_data(self.current_workspace, str(absolute_path))
                 if id is not None:
-                    print(f"Data {absolute_path.name} added successfully to workspace: {self.current_workspace}.")
+                    print(f"[queue] Registered source #{id} in {self.current_workspace}: {absolute_path}\n        Background processing is queued; use queue or data ls to inspect progress.")
                     self.audio_queue.put((id, absolute_path))
                 else:
-                    print(f"Error: Data {absolute_path.name} addition failed.")
+                    print(f"[error] Could not register {absolute_path.name}. See the database message above.")
         else:
-            print(f"Unknown sub-command: {sub_commands}")
+            print(f"[error] Unknown data command: {sub_commands!r}. Use data ls or data add <path>.")
             return
 
     def handle_queue(self, args=None):
         rows = self.sql_db.get_all_queued_data()
-        print(f"{len(rows)} data found in the queue:")
+        print(f"\nProcessing queue ({len(rows)} unfinished sources; includes active work)\n  ID     Status         File / path")
         if len(rows) == 0:
             return
         for (id, path, status) in rows:
-            print(f"{id} - {Path(path).name} - {status}")
+            print(f"  {id:<6} {status:<14} {Path(path).name}\n         Path: {path}")
         return
 
     def handle_audio(self, id: int, path: str, worker_db: SQLDB):
@@ -341,38 +403,40 @@ class CLI:
     def handle_embed(self, id: int, path: str, status: str, worker_db: SQLDB):
         self.raw_process.embedding.load_model()
         if status == "transcribed":
-            print(f"embedding transcribed text...")
+            print(f"[index:text] Source #{id} | {Path(path).name}: generating and uploading transcript embeddings...")
             self.raw_process.process_text(connection=worker_db, sql_db=self.sql_db, pinecone_db=self.vector_db, abs_path=path, data_id=id)
             self.embed_queue.put((id, path, "text_embeded"))
         elif status == "text_embeded":
-            print(f"embedding video...")
+            print(f"[index:video] Source #{id} | {Path(path).name}: segmenting and indexing video clips...")
             self.raw_process.process_video(connection=worker_db, sql_db=self.sql_db, pinecone_db=self.vector_db, abs_path=path, data_id=id)
         else:
-            print(f"Error: Unknown status: {status}")
+            print(f"[error] Source #{id}: unsupported processing stage {status!r}.")
             return
     def handle_query(self, args=None):
         if len(args) == 0:
-            print(f"What would you like to query?")
+            print("[usage] q: <question>  -  First enter cd chat, then add your question after q:.")
             return
         user_query = " ".join(args).strip()
-        print("--------------------------------")
-        print("user: ", user_query)
-        print("--------------------------------")
+        print("\nQuestion\n--------")
+        print(user_query)
+        print("[search] Retrieving transcript and visual evidence across all workspaces...")
         hits = self.raw_process.semantic_search(self.vector_db, user_query)
         if len(hits) == 0:
-            print("No hits found.")
+            print("[search] No evidence passed the current retrieval threshold. Try another question or check indexed sources with data ls.")
             return
+        print(f"[search] Selected {len(hits)} evidence item(s); preparing source text and frames...")
         for index, hit in enumerate(hits):
             if hit['modality'] == "video":
-                frames = self.raw_process.extract_frames(hit['source_path'], hit['start'], hit['end'])
+                frames = self.raw_process.extract_frames(hit['source_path'], interval=5.0, start=hit['start'], end=hit['end'])
                 hits[index]['frames'] = frames
             else:
                 row = self.sql_db.get_transcription_by_chunk_id(hit['chunk_id'])
                 text = row[0]
                 hits[index]['text'] = text
+        print(f"[answer] Requesting a grounded answer from {self.model_config.chat_model}...")
         answer = self.llm.answer_question(user_query, hits, self.model_config.chat_model)
         self.display_answer(answer)
-        print("--------------------------------")
+        print("\n[hint] Ask another question with q: <question>, or type help.\n")
 
     def timestamp(self, seconds):
         seconds = int(seconds)
@@ -394,63 +458,63 @@ class CLI:
                         f" · {self.timestamp(citation.start_seconds)}"
                         f"–{self.timestamp(citation.end_seconds)}"
                     )
-                paragraphs.append(f"*Source: {source}*")
+                paragraphs.append(f"  Source: {source}\n  Evidence ({citation.evidence_type}): {citation.explanation}")
 
         if answer.limitations:
-            paragraphs.append("**Limitations**")
+            paragraphs.append("Limitations\n-----------")
             paragraphs.extend(f"- {item}" for item in answer.limitations)
         
-        print("\n\n".join(paragraphs))
+        print(f"\nAnswer | {answer.status.replace('_', ' ')}\n---------------------------\n" + "\n\n".join(paragraphs))
         
 
 
 
     def handle_model(self, args=None):
         if len(args) == 0:
-            print(f"Current Chat Model: {self.model_config.chat_model}")
-            print(f"Current Translation Model: {self.model_config.translation_model} {self.model_config.translation_model_name}")
-            print(f"Current Embedding Model: {self.model_config.embedding_model}")
-            print(f"Current Vector Database: {self.model_config.vector_db_provider}")
+            print(f"\nConfigured model preferences\n----------------------------\n  Answer:        {self.model_config.chat_provider}:{self.model_config.chat_model}")
+            print(f"  Transcription: {self.model_config.translation_model} {self.model_config.translation_model_name} (preference; worker currently loads small)")
+            print(f"  Embeddings:    {self.model_config.embedding_model}")
+            print(f"  Vector store:  {self.model_config.vector_db_provider}\n  Use model chat or model translation to open a selection menu.")
             return
         sub_commands = args[0]
         if sub_commands == "chat":
             chat_model = self.sql_db.get_chat_model("all")
             if chat_model is None:
-                print("No chat model found. Type /model chat to set a chat model.")
+                print("[error] No chat models are available in the local model catalog.")
                 return
             else:
                 model_provider = self.model_config.set_chat_model(chat_model)
                 if model_provider is None:
-                    print("Chat model set successfully.")
+                    print("[model] Chat preference selected. Re-enter cd chat to initialize the selected provider client.")
                     return
 
                 if self.sql_db.check_api_key(model_provider):
-                    print(f"API key for {model_provider} set successfully.")
+                    print(f"[credentials] Setup status recorded for {model_provider}. Re-enter cd chat before querying.")
                     self.sql_db.update_api_key(model_provider, 'Complete')
                 else:
-                    print(f"API key for {model_provider} not found. Please set the API key.")
+                    print(f"[error] No credential setup record found for {model_provider}. Use model chat to select/configure the provider.")
                     return
         elif sub_commands == "translation":
             translation_model = self.sql_db.get_translation_model()
             if translation_model is None:
-                print("No translation model found. Type /model translation to set a translation model.")
+                print("[error] No transcription models are available in the local model catalog.")
                 return
             else:
                 self.model_config.set_translation_model(translation_model)
         else:
-            print(f"Unknown sub-command: {sub_commands}")
+            print(f"[error] Unknown model command: {sub_commands!r}. Use model, model chat, or model translation.")
             return
     def dispatch(self, command):
         handler = self.commands.get(command[0])
         args = command[1:]
         if handler is None:
-            print(f"Unknown command: {command}. Type /help.")
+            print(f"[error] Unknown command: {command!r}. Type help for available commands.")
             return
         try:
             handler(args)
         except Exception as e:
-            print(f"Error: {e}")
+            print(f"[error] Command {' '.join(command)!r} could not finish: {e}")
             return
 
 if __name__ == "__main__":
-    cli = CLI() 
+    cli = CLI()

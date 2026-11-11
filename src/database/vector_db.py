@@ -14,19 +14,19 @@ class PineconeDatabase:
         )
 
         if not self.db.indexes.exists("mm-vectors-cli"):
-            print("Creating index...")
+            print("[index] Creating Pinecone index mm-vectors-cli (768 dimensions, cosine similarity)...")
             self.db.indexes.create(
                 name="mm-vectors-cli",
                 schema=schema
             )
-            print("mm-vectors-cli index created")
+            print("[ready] Pinecone index created: mm-vectors-cli")
 
         self.index = self.db.Index("mm-vectors-cli")
 
     def add_video_data(self, name, embedding, start, end, source_id, source_path):
         try:
             self.index.documents.upsert(
-                namespace = "video",
+                namespace = "videos",
                 documents = [
                     {
                         "_id": name,
@@ -38,9 +38,9 @@ class PineconeDatabase:
                     }
                 ]
             )
-            print(f"Video data added to database: {id}")
+            print(f"[upload:video] Source #{source_id} | vector {name} | {start}-{end}s: uploaded.")
         except Exception as e:
-            print(f"Error adding video data: {e}")
+            print(f"[error] Video upload failed | source #{source_id} | vector {name} | file {source_path}: {e}")
 
     def add_text_data(self, embedding, data_id: int, source_path: str, chunk_id: int, start: float, end: float):
         try:  
@@ -58,8 +58,9 @@ class PineconeDatabase:
                     }
                 ]
             )
+            print(f"[upload:text] Source #{data_id} | chunk #{chunk_id} | {start}-{end}s: uploaded.")
         except Exception as e:
-            print(f"Error adding text data: {e}")
+            print(f"[error] Transcript upload failed | source #{data_id} | chunk #{chunk_id} | file {source_path}: {e}")
 
     def query(self, query):
         visual_serach = self.index.documents.search(
